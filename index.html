@@ -47,7 +47,7 @@
       border-radius: 14px;
       padding: 14px;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
       gap: 10px;
       margin-bottom: 16px;
     }
@@ -86,6 +86,33 @@
     }
     .pill .val { font-size: 1.15rem; font-weight: 700; color: var(--accent); }
     .pill .lbl { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
+    .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .split-card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 10px;
+    }
+    .split-title {
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--gold);
+      margin-bottom: 4px;
+    }
+    .split-meta { font-size: 0.74rem; color: var(--muted); margin-bottom: 5px; }
+    .split-lines { font-size: 0.8rem; line-height: 1.45; }
+    .stage-tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+    }
+    .stage-reg { background: rgba(0, 184, 255, 0.16); color: #7ad8ff; }
+    .stage-ply { background: rgba(255, 184, 0, 0.18); color: var(--gold); }
     .empty { color: var(--muted); font-size: 0.9rem; padding: 12px 0; }
     .ppv-note {
       margin-top: 14px;
@@ -112,6 +139,12 @@
         <option value="Women Premier League">Women Premier League</option>
         <option value="Men Premier League">Men Premier League</option>
         <option value="Men Division 1">Men Division 1</option>
+      </select>
+
+      <select id="stageFilter" aria-label="Filter by season stage">
+        <option value="all">All Games (Reg + Playoffs)</option>
+        <option value="regular">Regular Season</option>
+        <option value="playoffs">Playoffs</option>
       </select>
 
       <select id="statSelect" aria-label="Primary stat">
@@ -148,7 +181,7 @@
       <div class="card">
         <h2>Player Stat Breakdown</h2>
         <div id="playerDetail" class="detail-box">
-          <p class="empty">Tap any player row to inspect full per-game & total numbers.</p>
+          <p class="empty">Tap any player row to inspect full per-game, split & total numbers.</p>
         </div>
         <div class="ppv-note" id="ppvStatus">
           Pay-Per-View Pass Mode: Currently Open Free. Ready for M-Pesa / pass gating in a future release.
@@ -160,12 +193,37 @@
   <script>
     const PPV_ENABLED = false;
     let DATASET = { players: [], games: [] };
-    let selectedPlayer = null;
+    let selectedPlayerKey = null;
 
     const STAT_LABELS = {
       ppg: "PPG", rpg: "RPG", apg: "APG", spg: "SPG", bpg: "BPG",
       epg: "EFF/G", pts: "PTS", reb: "REB"
     };
+
+    const STAGE_LABELS = {
+      all: "All Games",
+      regular: "Regular Season",
+      playoffs: "Playoffs"
+    };
+
+    function getStageStats(player, stageKey) {
+      if (player && player.splits && player.splits[stageKey]) {
+        return player.splits[stageKey];
+      }
+      return player;
+    }
+
+    function getPlayerKey(player) {
+      return `${player.division}::${player.player}::${player.team}`;
+    }
+
+    function formatStageBadge(rawStage) {
+      const s = String(rawStage || "regular").toLowerCase();
+      if (s.includes("playoff")) {
+        return `<span class="stage-tag stage-ply">PLY</span>`;
+      }
+      return `<span class="stage-tag stage-reg">REG</span>`;
+    }
 
     async function loadData() {
       try {
@@ -180,78 +238,131 @@
 
     function render() {
       const divVal = document.getElementById("divisionFilter").value;
+      const stageVal = document.getElementById("stageFilter").value;
       const statKey = document.getElementById("statSelect").value;
       const query = document.getElementById("searchInput").value.trim().toLowerCase();
 
-      document.getElementById("activeStatHeader").textContent = STAT_LABELS[statKey] || statKey.toUpperCase();
+      const statLabel = STAT_LABELS[statKey] || statKey.toUpperCase();
+      const stageLabel = STAGE_LABELS[stageVal] || "All Games";
+
+      document.getElementById("activeStatHeader").textContent = statLabel;
       document.getElementById("tableTitle").textContent =
-        `${divVal === "ALL" ? "All Divisions" : divVal} — ${STAT_LABELS[statKey] || statKey.toUpperCase()} Leaders`;
+        `${divVal === "ALL" ? "All Divisions" : divVal} (${stageLabel}) — ${statLabel} Leaders`;
 
       const filtered = DATASET.players
-        .filter(p => {
-          const divMatch = divVal === "ALL" || p.division === divVal;
+        .map(p => ({ base: p, stats: getStageStats(p, stageVal) }))
+        .filter(({ base, stats }) => {
+          const divMatch = divVal === "ALL" || base.division === divVal;
           const qMatch = !query ||
-            p.player.toLowerCase().includes(query) ||
-            p.team.toLowerCase().includes(query);
-          return divMatch && qMatch;
+            base.player.toLowerCase().includes(query) ||
+            base.team.toLowerCase().includes(query);
+          const stageGp = stats?.gp ?? 0;
+          const stageMatch = stageVal === "all" || stageGp > 0;
+          return divMatch && qMatch && stageMatch;
         })
-        .sort((a, b) => (b[statKey] ?? 0) - (a[statKey] ?? 0));
+        .sort((a, b) => (b.stats?.[statKey] ?? 0) - (a.stats?.[statKey] ?? 0));
 
       const tbody = document.getElementById("leaderboardBody");
       if (!filtered.length) {
-        tbody.innerHTML = `<tr><td colspan="5" class="empty">No matching players found. Export <code>knbl_dashboard_data.json</code> or adjust filters.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="5" class="empty">No matching players found for ${stageLabel}. Export <code>knbl_dashboard_data.json</code> or adjust filters.</td></tr>`;
+        document.getElementById("playerDetail").innerHTML = `<p class="empty">No player selected for this filter.</p>`;
         return;
       }
 
-      tbody.innerHTML = filtered.map((p, idx) => `
-        <tr class="player-row" onclick='selectPlayer(${JSON.stringify(p).replace(/'/g, "&apos;")})'>
-          <td>${idx + 1}</td>
-          <td><strong>${p.player}</strong></td>
-          <td>${p.team}</td>
-          <td>${p.gp}</td>
-          <td class="stat-hi">${p[statKey]}</td>
-        </tr>
-      `).join("");
+      tbody.innerHTML = filtered.map(({ base, stats }, idx) => {
+        const pKey = getPlayerKey(base);
+        return `
+          <tr class="player-row" data-pkey="${encodeURIComponent(pKey)}">
+            <td>${idx + 1}</td>
+            <td><strong>${base.player}</strong></td>
+            <td>${base.team}</td>
+            <td>${stats.gp}</td>
+            <td class="stat-hi">${stats[statKey]}</td>
+          </tr>
+        `;
+      }).join("");
 
-      if (!selectedPlayer && filtered.length) {
-        renderPlayerDetail(filtered[0]);
+      tbody.querySelectorAll("tr.player-row").forEach(tr => {
+        tr.addEventListener("click", () => {
+          selectedPlayerKey = decodeURIComponent(tr.dataset.pkey);
+          const match = filtered.find(item => getPlayerKey(item.base) === selectedPlayerKey) || filtered[0];
+          renderPlayerDetail(match.base, stageVal);
+        });
+      });
+
+      const activeMatch =
+        (selectedPlayerKey && filtered.find(item => getPlayerKey(item.base) === selectedPlayerKey)) ||
+        filtered[0];
+      selectedPlayerKey = getPlayerKey(activeMatch.base);
+      renderPlayerDetail(activeMatch.base, stageVal);
+    }
+
+    function renderSplitBox(title, s) {
+      if (!s || (s.gp ?? 0) === 0) {
+        return `
+          <div class="split-card">
+            <div class="split-title">${title}</div>
+            <div class="split-meta">0 GP</div>
+            <div class="split-lines" style="color:var(--muted);">No games recorded</div>
+          </div>
+        `;
       }
+      return `
+        <div class="split-card">
+          <div class="split-title">${title}</div>
+          <div class="split-meta">${s.gp} GP • ${s.pts} PTS • ${s.reb} REB • ${s.ast} AST</div>
+          <div class="split-lines">
+            <strong>${s.ppg}</strong> PPG • <strong>${s.rpg}</strong> RPG • <strong>${s.apg}</strong> APG • <strong>${s.epg}</strong> EFF/G
+          </div>
+        </div>
+      `;
     }
 
-    function selectPlayer(p) {
-      selectedPlayer = p;
-      renderPlayerDetail(p);
-    }
-
-    function renderPlayerDetail(p) {
+    function renderPlayerDetail(p, stageVal) {
       const detail = document.getElementById("playerDetail");
-      const playerGames = DATASET.games.filter(g => g.player === p.player && g.team === p.team);
+      const activeStats = getStageStats(p, stageVal);
+      const regStats = p.splits?.regular;
+      const plyStats = p.splits?.playoffs;
+
+      const playerGames = DATASET.games.filter(g => {
+        const samePlayer = g.player === p.player && g.team === p.team && (!g.division || g.division === p.division);
+        const stageMatch = stageVal === "all" || String(g.stage || "regular").toLowerCase() === stageVal;
+        return samePlayer && stageMatch;
+      });
 
       detail.innerHTML = `
         <div>
           <div style="font-size:1.1rem;font-weight:700;">${p.player}</div>
-          <div style="color:var(--muted);font-size:0.85rem;">${p.team} • ${p.division} • ${p.gp} GP</div>
+          <div style="color:var(--muted);font-size:0.85rem;">${p.team} • ${p.division} • ${STAGE_LABELS[stageVal] || "All Games"} (${activeStats.gp} GP)</div>
         </div>
         <div class="stat-pills">
-          <div class="pill"><div class="val">${p.ppg}</div><div class="lbl">PPG (${p.pts} TOT)</div></div>
-          <div class="pill"><div class="val">${p.rpg}</div><div class="lbl">RPG (${p.reb} TOT)</div></div>
-          <div class="pill"><div class="val">${p.apg}</div><div class="lbl">APG (${p.ast} TOT)</div></div>
-          <div class="pill"><div class="val">${p.spg}</div><div class="lbl">SPG (${p.stl} TOT)</div></div>
-          <div class="pill"><div class="val">${p.bpg}</div><div class="lbl">BPG (${p.blk} TOT)</div></div>
-          <div class="pill"><div class="val">${p.epg}</div><div class="lbl">EFF/G (${p.eff} TOT)</div></div>
+          <div class="pill"><div class="val">${activeStats.ppg}</div><div class="lbl">PPG (${activeStats.pts} TOT)</div></div>
+          <div class="pill"><div class="val">${activeStats.rpg}</div><div class="lbl">RPG (${activeStats.reb} TOT)</div></div>
+          <div class="pill"><div class="val">${activeStats.apg}</div><div class="lbl">APG (${activeStats.ast} TOT)</div></div>
+          <div class="pill"><div class="val">${activeStats.spg}</div><div class="lbl">SPG (${activeStats.stl} TOT)</div></div>
+          <div class="pill"><div class="val">${activeStats.bpg}</div><div class="lbl">BPG (${activeStats.blk} TOT)</div></div>
+          <div class="pill"><div class="val">${activeStats.epg}</div><div class="lbl">EFF/G (${activeStats.eff} TOT)</div></div>
         </div>
         <div style="font-size:0.84rem;color:var(--muted);">
-          Shooting: FG ${p.fg_pct}% (${p.fgm}/${p.fga}) • 3PT ${p.tp_pct}% (${p.tpm}/${p.tpa}) • FT ${p.ft_pct}% (${p.ftm}/${p.fta})
+          Shooting: FG ${activeStats.fg_pct}% (${activeStats.fgm}/${activeStats.fga}) • 3PT ${activeStats.tp_pct}% (${activeStats.tpm}/${activeStats.tpa}) • FT ${activeStats.ft_pct}% (${activeStats.ftm}/${activeStats.fta})
+        </div>
+        <div>
+          <strong style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:6px;">Season Split Comparison</strong>
+          <div class="split-grid">
+            ${renderSplitBox("Regular Season", regStats)}
+            ${renderSplitBox("Playoffs", plyStats)}
+          </div>
         </div>
         <div>
           <strong style="font-size:0.88rem;">Game Log (${playerGames.length})</strong>
           ${playerGames.length ? `
             <table style="margin-top:6px;font-size:0.8rem;">
-              <thead><tr><th>Date</th><th>vs</th><th>PTS</th><th>REB</th><th>AST</th><th>EFF</th></tr></thead>
+              <thead><tr><th>Date</th><th>Stage</th><th>vs</th><th>PTS</th><th>REB</th><th>AST</th><th>EFF</th></tr></thead>
               <tbody>
                 ${playerGames.map(g => `
                   <tr>
                     <td>${g.date}</td>
+                    <td>${formatStageBadge(g.stage)}</td>
                     <td>${g.opponent}</td>
                     <td>${g.pts}</td>
                     <td>${g.reb}</td>
@@ -261,14 +372,15 @@
                 `).join("")}
               </tbody>
             </table>
-          ` : `<p class="empty">No game rows attached.</p>`}
+          ` : `<p class="empty">No game rows attached for this stage.</p>`}
         </div>
       `;
     }
 
-    document.getElementById("divisionFilter").addEventListener("change", () => { selectedPlayer = null; render(); });
-    document.getElementById("statSelect").addEventListener("change", () => { selectedPlayer = null; render(); });
-    document.getElementById("searchInput").addEventListener("input", () => { selectedPlayer = null; render(); });
+    document.getElementById("divisionFilter").addEventListener("change", render);
+    document.getElementById("stageFilter").addEventListener("change", render);
+    document.getElementById("statSelect").addEventListener("change", render);
+    document.getElementById("searchInput").addEventListener("input", render);
 
     loadData();
   </script>
