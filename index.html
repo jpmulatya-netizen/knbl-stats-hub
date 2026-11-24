@@ -148,14 +148,32 @@
       </select>
 
       <select id="statSelect" aria-label="Primary stat">
-        <option value="ppg">Points Per Game (PPG)</option>
-        <option value="rpg">Rebounds Per Game (RPG)</option>
-        <option value="apg">Assists Per Game (APG)</option>
-        <option value="spg">Steals Per Game (SPG)</option>
-        <option value="bpg">Blocks Per Game (BPG)</option>
-        <option value="epg">Efficiency Per Game (EFF)</option>
-        <option value="pts">Total Points (PTS)</option>
-        <option value="reb">Total Rebounds (REB)</option>
+        <optgroup label="Per Game Averages">
+          <option value="ppg">Points Per Game (PPG)</option>
+          <option value="rpg">Rebounds Per Game (RPG)</option>
+          <option value="apg">Assists Per Game (APG)</option>
+          <option value="spg">Steals Per Game (SPG)</option>
+          <option value="bpg">Blocks Per Game (BPG)</option>
+          <option value="tpg">Turnovers Per Game (TO/G)</option>
+          <option value="epg">Efficiency Per Game (EFF/G)</option>
+          <option value="pmg">Plus / Minus Per Game (+/- /G)</option>
+        </optgroup>
+        <optgroup label="Season Totals">
+          <option value="pts">Total Points (PTS)</option>
+          <option value="reb">Total Rebounds (REB)</option>
+          <option value="ast">Total Assists (AST)</option>
+          <option value="stl">Total Steals (STL)</option>
+          <option value="blk">Total Blocks (BLK)</option>
+          <option value="to">Total Turnovers (TO)</option>
+          <option value="eff">Total Efficiency (EFF)</option>
+          <option value="plus_minus">Total Plus / Minus (+/-)</option>
+          <option value="fgm">Total Field Goals Made (FGM)</option>
+          <option value="fga">Total Field Goals Attempted (FGA)</option>
+          <option value="tpm">Total 3-Pointers Made (3PM)</option>
+          <option value="tpa">Total 3-Pointers Attempted (3PA)</option>
+          <option value="ftm">Total Free Throws Made (FTM)</option>
+          <option value="fta">Total Free Throws Attempted (FTA)</option>
+        </optgroup>
       </select>
 
       <input id="searchInput" type="text" placeholder="Search player or team (e.g. Storms, Malaikas)..." />
@@ -196,8 +214,28 @@
     let selectedPlayerKey = null;
 
     const STAT_LABELS = {
-      ppg: "PPG", rpg: "RPG", apg: "APG", spg: "SPG", bpg: "BPG",
-      epg: "EFF/G", pts: "PTS", reb: "REB"
+      ppg: "PPG",
+      rpg: "RPG",
+      apg: "APG",
+      spg: "SPG",
+      bpg: "BPG",
+      tpg: "TO/G",
+      epg: "EFF/G",
+      pmg: "+/-/G",
+      pts: "PTS (TOT)",
+      reb: "REB (TOT)",
+      ast: "AST (TOT)",
+      stl: "STL (TOT)",
+      blk: "BLK (TOT)",
+      to: "TO (TOT)",
+      eff: "EFF (TOT)",
+      plus_minus: "+/- (TOT)",
+      fgm: "FGM (TOT)",
+      fga: "FGA (TOT)",
+      tpm: "3PM (TOT)",
+      tpa: "3PA (TOT)",
+      ftm: "FTM (TOT)",
+      fta: "FTA (TOT)",
     };
 
     const STAGE_LABELS = {
@@ -223,6 +261,20 @@
         return `<span class="stage-tag stage-ply">PLY</span>`;
       }
       return `<span class="stage-tag stage-reg">REG</span>`;
+    }
+
+    function formatSignedStat(val) {
+      const num = Number(val ?? 0);
+      if (Number.isNaN(num)) return "0";
+      return num > 0 ? `+${num}` : `${num}`;
+    }
+
+    function formatLeaderboardValue(statKey, rawVal) {
+      const val = rawVal ?? 0;
+      if (statKey === "pmg" || statKey === "plus_minus") {
+        return formatSignedStat(val);
+      }
+      return val;
     }
 
     async function loadData() {
@@ -277,7 +329,7 @@
             <td><strong>${base.player}</strong></td>
             <td>${base.team}</td>
             <td>${stats.gp}</td>
-            <td class="stat-hi">${stats[statKey]}</td>
+            <td class="stat-hi">${formatLeaderboardValue(statKey, stats[statKey])}</td>
           </tr>
         `;
       }).join("");
@@ -310,7 +362,7 @@
       return `
         <div class="split-card">
           <div class="split-title">${title}</div>
-          <div class="split-meta">${s.gp} GP • ${s.pts} PTS • ${s.reb} REB • ${s.ast} AST</div>
+          <div class="split-meta">${s.gp} GP • ${s.pts} PTS • ${s.reb} REB • ${s.ast} AST • ${formatSignedStat(s.plus_minus)} +/-</div>
           <div class="split-lines">
             <strong>${s.ppg}</strong> PPG • <strong>${s.rpg}</strong> RPG • <strong>${s.apg}</strong> APG • <strong>${s.epg}</strong> EFF/G
           </div>
@@ -342,9 +394,12 @@
           <div class="pill"><div class="val">${activeStats.spg}</div><div class="lbl">SPG (${activeStats.stl} TOT)</div></div>
           <div class="pill"><div class="val">${activeStats.bpg}</div><div class="lbl">BPG (${activeStats.blk} TOT)</div></div>
           <div class="pill"><div class="val">${activeStats.epg}</div><div class="lbl">EFF/G (${activeStats.eff} TOT)</div></div>
+          <div class="pill"><div class="val">${activeStats.tpg ?? 0}</div><div class="lbl">TO/G (${activeStats.to ?? 0} TOT)</div></div>
+          <div class="pill"><div class="val">${formatSignedStat(activeStats.pmg)}</div><div class="lbl">+/-/G (${formatSignedStat(activeStats.plus_minus)} TOT)</div></div>
+          <div class="pill"><div class="val">${activeStats.fg_pct}%</div><div class="lbl">FG (${activeStats.fgm}/${activeStats.fga})</div></div>
         </div>
         <div style="font-size:0.84rem;color:var(--muted);">
-          Shooting: FG ${activeStats.fg_pct}% (${activeStats.fgm}/${activeStats.fga}) • 3PT ${activeStats.tp_pct}% (${activeStats.tpm}/${activeStats.tpa}) • FT ${activeStats.ft_pct}% (${activeStats.ftm}/${activeStats.fta})
+          3PT: ${activeStats.tp_pct}% (${activeStats.tpm}/${activeStats.tpa}) • FT: ${activeStats.ft_pct}% (${activeStats.ftm}/${activeStats.fta})
         </div>
         <div>
           <strong style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:6px;">Season Split Comparison</strong>
@@ -357,7 +412,7 @@
           <strong style="font-size:0.88rem;">Game Log (${playerGames.length})</strong>
           ${playerGames.length ? `
             <table style="margin-top:6px;font-size:0.8rem;">
-              <thead><tr><th>Date</th><th>Stage</th><th>vs</th><th>PTS</th><th>REB</th><th>AST</th><th>EFF</th></tr></thead>
+              <thead><tr><th>Date</th><th>Stage</th><th>vs</th><th>PTS</th><th>REB</th><th>AST</th><th>EFF</th><th>+/-</th></tr></thead>
               <tbody>
                 ${playerGames.map(g => `
                   <tr>
@@ -368,6 +423,7 @@
                     <td>${g.reb}</td>
                     <td>${g.ast}</td>
                     <td>${g.eff}</td>
+                    <td>${formatSignedStat(g.plus_minus)}</td>
                   </tr>
                 `).join("")}
               </tbody>
