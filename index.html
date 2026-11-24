@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KNBL Stats Hub — Interactive League & Player Stats</title>
+  <style>
+    :root {
+      --bg: #050d1a;
+      --panel: #0c192e;
+      --panel-2: #122442;
+      --accent: #00b8ff;
+      --gold: #ffb800;
+      --text: #f3f7fc;
+      --muted: #93a7c4;
+      --border: rgba(255, 255, 255, 0.1);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+    .topbar {
+      background: linear-gradient(135deg, #0b1c36 0%, #102a52 100%);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .brand h1 { font-size: 1.35rem; letter-spacing: 0.4px; }
+    .brand p { color: var(--muted); font-size: 0.88rem; margin-top: 3px; }
+    .badge-free {
+      background: rgba(0, 184, 255, 0.16);
+      border: 1px solid var(--accent);
+      color: #7ad8ff;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .controls {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    select, input {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 0.92rem;
+    }
+    .grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; }
+    @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      overflow-x: auto;
+    }
+    .card h2 { font-size: 1.05rem; margin-bottom: 10px; color: var(--gold); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; cursor: pointer; user-select: none; }
+    tr.player-row:hover { background: rgba(0, 184, 255, 0.08); cursor: pointer; }
+    .stat-hi { color: var(--gold); font-weight: 700; }
+    .detail-box { display: flex; flex-direction: column; gap: 10px; }
+    .stat-pills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .pill {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      text-align: center;
+    }
+    .pill .val { font-size: 1.15rem; font-weight: 700; color: var(--accent); }
+    .pill .lbl { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
+    .empty { color: var(--muted); font-size: 0.9rem; padding: 12px 0; }
+    .ppv-note {
+      margin-top: 14px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <div class="brand">
+        <h1>KNBL INTERACTIVE STATS HUB</h1>
+        <p>Search any player, team, or stat category across KNBL match weekends</p>
+      </div>
+      <div id="accessBadge" class="badge-free">OPEN ACCESS • FREE PREVIEW</div>
+    </div>
+
+    <div class="controls">
+      <select id="divisionFilter" aria-label="Filter by division">
+        <option value="ALL">All Divisions</option>
+        <option value="Women Premier League">Women Premier League</option>
+        <option value="Men Premier League">Men Premier League</option>
+        <option value="Men Division 1">Men Division 1</option>
+      </select>
+
+      <select id="statSelect" aria-label="Primary stat">
+        <option value="ppg">Points Per Game (PPG)</option>
+        <option value="rpg">Rebounds Per Game (RPG)</option>
+        <option value="apg">Assists Per Game (APG)</option>
+        <option value="spg">Steals Per Game (SPG)</option>
+        <option value="bpg">Blocks Per Game (BPG)</option>
+        <option value="epg">Efficiency Per Game (EFF)</option>
+        <option value="pts">Total Points (PTS)</option>
+        <option value="reb">Total Rebounds (REB)</option>
+      </select>
+
+      <input id="searchInput" type="text" placeholder="Search player or team (e.g. Storms, Malaikas)..." />
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2 id="tableTitle">Leaderboard</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Player</th>
+              <th>Team</th>
+              <th>GP</th>
+              <th id="activeStatHeader">STAT</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Player Stat Breakdown</h2>
+        <div id="playerDetail" class="detail-box">
+          <p class="empty">Tap any player row to inspect full per-game & total numbers.</p>
+        </div>
+        <div class="ppv-note" id="ppvStatus">
+          Pay-Per-View Pass Mode: Currently Open Free. Ready for M-Pesa / pass gating in a future release.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PPV_ENABLED = false;
+    let DATASET = { players: [], games: [] };
+    let selectedPlayer = null;
+
+    const STAT_LABELS = {
+      ppg: "PPG", rpg: "RPG", apg: "APG", spg: "SPG", bpg: "BPG",
+      epg: "EFF/G", pts: "PTS", reb: "REB"
+    };
+
+    async function loadData() {
+      try {
+        const res = await fetch("./knbl_dashboard_data.json");
+        if (!res.ok) throw new Error("JSON not found");
+        DATASET = await res.json();
+      } catch (e) {
+        DATASET = { players: [], games: [] };
+      }
+      render();
+    }
+
+    function render() {
+      const divVal = document.getElementById("divisionFilter").value;
+      const statKey = document.getElementById("statSelect").value;
+      const query = document.getElementById("searchInput").value.trim().toLowerCase();
+
+      document.getElementById("activeStatHeader").textContent = STAT_LABELS[statKey] || statKey.toUpperCase();
+      document.getElementById("tableTitle").textContent =
+        `${divVal === "ALL" ? "All Divisions" : divVal} — ${STAT_LABELS[statKey] || statKey.toUpperCase()} Leaders`;
+
+      const filtered = DATASET.players
+        .filter(p => {
+          const divMatch = divVal === "ALL" || p.division === divVal;
+          const qMatch = !query ||
+            p.player.toLowerCase().includes(query) ||
+            p.team.toLowerCase().includes(query);
+          return divMatch && qMatch;
+        })
+        .sort((a, b) => (b[statKey] ?? 0) - (a[statKey] ?? 0));
+
+      const tbody = document.getElementById("leaderboardBody");
+      if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty">No matching players found. Export <code>knbl_dashboard_data.json</code> or adjust filters.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map((p, idx) => `
+        <tr class="player-row" onclick='selectPlayer(${JSON.stringify(p).replace(/'/g, "&apos;")})'>
+          <td>${idx + 1}</td>
+          <td><strong>${p.player}</strong></td>
+          <td>${p.team}</td>
+          <td>${p.gp}</td>
+          <td class="stat-hi">${p[statKey]}</td>
+        </tr>
+      `).join("");
+
+      if (!selectedPlayer && filtered.length) {
+        renderPlayerDetail(filtered[0]);
+      }
+    }
+
+    function selectPlayer(p) {
+      selectedPlayer = p;
+      renderPlayerDetail(p);
+    }
+
+    function renderPlayerDetail(p) {
+      const detail = document.getElementById("playerDetail");
+      const playerGames = DATASET.games.filter(g => g.player === p.player && g.team === p.team);
+
+      detail.innerHTML = `
+        <div>
+          <div style="font-size:1.1rem;font-weight:700;">${p.player}</div>
+          <div style="color:var(--muted);font-size:0.85rem;">${p.team} • ${p.division} • ${p.gp} GP</div>
+        </div>
+        <div class="stat-pills">
+          <div class="pill"><div class="val">${p.ppg}</div><div class="lbl">PPG (${p.pts} TOT)</div></div>
+          <div class="pill"><div class="val">${p.rpg}</div><div class="lbl">RPG (${p.reb} TOT)</div></div>
+          <div class="pill"><div class="val">${p.apg}</div><div class="lbl">APG (${p.ast} TOT)</div></div>
+          <div class="pill"><div class="val">${p.spg}</div><div class="lbl">SPG (${p.stl} TOT)</div></div>
+          <div class="pill"><div class="val">${p.bpg}</div><div class="lbl">BPG (${p.blk} TOT)</div></div>
+          <div class="pill"><div class="val">${p.epg}</div><div class="lbl">EFF/G (${p.eff} TOT)</div></div>
+        </div>
+        <div style="font-size:0.84rem;color:var(--muted);">
+          Shooting: FG ${p.fg_pct}% (${p.fgm}/${p.fga}) • 3PT ${p.tp_pct}% (${p.tpm}/${p.tpa}) • FT ${p.ft_pct}% (${p.ftm}/${p.fta})
+        </div>
+        <div>
+          <strong style="font-size:0.88rem;">Game Log (${playerGames.length})</strong>
+          ${playerGames.length ? `
+            <table style="margin-top:6px;font-size:0.8rem;">
+              <thead><tr><th>Date</th><th>vs</th><th>PTS</th><th>REB</th><th>AST</th><th>EFF</th></tr></thead>
+              <tbody>
+                ${playerGames.map(g => `
+                  <tr>
+                    <td>${g.date}</td>
+                    <td>${g.opponent}</td>
+                    <td>${g.pts}</td>
+                    <td>${g.reb}</td>
+                    <td>${g.ast}</td>
+                    <td>${g.eff}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          ` : `<p class="empty">No game rows attached.</p>`}
+        </div>
+      `;
+    }
+
+    document.getElementById("divisionFilter").addEventListener("change", () => { selectedPlayer = null; render(); });
+    document.getElementById("statSelect").addEventListener("change", () => { selectedPlayer = null; render(); });
+    document.getElementById("searchInput").addEventListener("input", () => { selectedPlayer = null; render(); });
+
+    loadData();
+  </script>
+</body>
+</html>
