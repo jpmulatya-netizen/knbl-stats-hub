@@ -142,6 +142,7 @@
       <select id="divisionFilter" aria-label="Filter by division">
         <option value="ALL">All Divisions</option>
         <option value="Women Premier League">Women Premier League</option>
+        <option value="Women Division 1">Women Division 1</option>
         <option value="Men Premier League">Men Premier League</option>
         <option value="Men Division 1">Men Division 1</option>
       </select>
@@ -224,6 +225,13 @@
     let DATASET = { years: [], players: [], games: [] };
     let selectedPlayerKey = null;
 
+    const PREFERRED_DIVISIONS = [
+      "Women Premier League",
+      "Women Division 1",
+      "Men Premier League",
+      "Men Division 1",
+    ];
+
     const STAT_LABELS = {
       ppg: "PPG",
       rpg: "RPG",
@@ -276,7 +284,7 @@
 
     function extractGameYear(g) {
       if (g && g.year && g.year !== "Unknown") return String(g.year);
-      const match = String(g?.date || "").match(/\b(20\d{2})\b/);
+      const match = String(g?.date || "").match(/\b((?:19|20)\d{2})\b/);
       return match ? match[1] : "Unknown";
     }
 
@@ -321,17 +329,7 @@
     function formatSignedStat(val) {
       const num = Number(val ?? 0);
       if (Number.isNaN(num)) return "0";
-      return num > 0 ? `+${num}` : `${num}`;
-    }
-
-    function formatLeaderboardValue(statKey, stats) {
-      if (!stats) return "0";
-      if (PCT_META[statKey]) {
-        const { madeKey, attKey } = PCT_META[statKey];
-        const pct = Number(stats[statKey] ?? 0).toFixed(1);
-        const made = stats[madeKey] ?? 0;
-        const att = stats[attKey] ?? 0;
-        return `${pct}%<span class="stat-sub">(${made}/${att})</span>`;
+      return num > 0 ? `+${num}` : `${num}`; }  function formatLeaderboardValue(statKey, stats) { if (!stats) return "0"; if (PCT_META[statKey]) { const { madeKey, attKey } = PCT_META[statKey]; const pct = Number(stats[statKey] ?? 0).toFixed(1); const made = stats[madeKey] ?? 0; const att = stats[attKey] ?? 0; return `${pct}%<span class="stat-sub">(${made}/${att})</span>`;
       }
       const val = stats[statKey] ?? 0;
       if (statKey === "pmg" || statKey === "plus_minus") {
@@ -356,32 +354,28 @@
       yearSelect.value = sortedYears.includes(currentVal) ? currentVal : "ALL";
     }
 
-    async function loadData() {
-      try {
-        const res = await fetch("./knbl_dashboard_data.json");
-        if (!res.ok) throw new Error("JSON not found");
-        DATASET = await res.json();
-      } catch (e) {
-        DATASET = { years: [], players: [], games: [] };
+    function populateDivisionFilter() {
+      const divSelect = document.getElementById("divisionFilter");
+      const currentVal = divSelect.value || "ALL";
+      const seen = new Set(PREFERRED_DIVISIONS);
+      const orderedDivisions = [...PREFERRED_DIVISIONS];
+
+      if (Array.isArray(DATASET.players)) {
+        DATASET.players.forEach(p => {
+          const d = String(p.division || "").trim();
+          if (d && !seen.has(d)) {
+            seen.add(d);
+            orderedDivisions.push(d);
+          }
+        });
       }
-      populateYearFilter();
-      render();
-    }
 
-    function render() {
-      const yearVal = document.getElementById("yearFilter").value;
-      const divVal = document.getElementById("divisionFilter").value;
-      const stageVal = document.getElementById("stageFilter").value;
-      const statKey = document.getElementById("statSelect").value;
-      const query = document.getElementById("searchInput").value.trim().toLowerCase();
-
-      const statLabel = STAT_LABELS[statKey] || statKey.toUpperCase();
-      const stageLabel = STAGE_LABELS[stageVal] || "All Games";
-      const yearPrefix = yearVal === "ALL" ? "" : `${yearVal} • `;
+      divSelect.innerHTML = `<option value="ALL">All Divisions</option>` +
+        orderedDivisions.map(d => `<option value="${d}">${d}</option>`).join(""); divSelect.value = orderedDivisions.includes(currentVal) ? currentVal : "ALL"; }  async function loadData() { try { const res = await fetch("./knbl_dashboard_data.json"); if (!res.ok) throw new Error("JSON not found"); DATASET = await res.json(); } catch (e) { DATASET = { years: [], players: [], games: [] }; } populateYearFilter(); populateDivisionFilter(); render(); }  function render() { const yearVal = document.getElementById("yearFilter").value; const divVal = document.getElementById("divisionFilter").value; const stageVal = document.getElementById("stageFilter").value; const statKey = document.getElementById("statSelect").value; const query = document.getElementById("searchInput").value.trim().toLowerCase();  const statLabel = STAT_LABELS[statKey] \vert{}\vert{} statKey.toUpperCase(); const stageLabel = STAGE_LABELS[stageVal] \vert{}\vert{} "All Games"; const yearPrefix = yearVal === "ALL" ? "" : `${yearVal} • `;
 
       document.getElementById("activeStatHeader").textContent = statLabel;
       document.getElementById("tableTitle").textContent =
-        `${yearPrefix}${divVal === "ALL" ? "All Divisions" : divVal} (${stageLabel}) — ${statLabel} Leaders`;
+        `${yearPrefix}${divVal === "ALL" ? "All Divisions" : divVal} (${stageLabel}) —${statLabel} Leaders`;
 
       const filtered = DATASET.players
         .map(p => ({ base: p, stats: getStageStats(p, stageVal, yearVal) }))
@@ -446,97 +440,4 @@
     function renderSplitBox(title, s) {
       if (!s || (s.gp ?? 0) === 0) {
         return `
-          <div class="split-card">
-            <div class="split-title">${title}</div>
-            <div class="split-meta">0 GP</div>
-            <div class="split-lines" style="color:var(--muted);">No games recorded</div>
-          </div>
-        `;
-      }
-      return `
-        <div class="split-card">
-          <div class="split-title">${title}</div>
-          <div class="split-meta">${s.gp} GP • ${s.pts} PTS • ${s.reb} REB • ${s.ast} AST • ${formatSignedStat(s.plus_minus)} +/-</div>
-          <div class="split-lines">
-            <strong>${s.ppg}</strong> PPG • <strong>${s.rpg}</strong> RPG • <strong>${s.apg}</strong> APG • <strong>${s.epg}</strong> EFF/G
-          </div>
-        </div>
-      `;
-    }
-
-    function renderPlayerDetail(p, stageVal, yearVal) {
-      const detail = document.getElementById("playerDetail");
-      const scopedSplits = getScopedSplits(p, yearVal);
-      const activeStats = scopedSplits[stageVal] || getStageStats(p, stageVal, yearVal);
-      const regStats = scopedSplits.regular;
-      const plyStats = scopedSplits.playoffs;
-      const yearLabel = yearVal === "ALL" ? "All Years" : yearVal;
-
-      const playerGames = DATASET.games.filter(g => {
-        const samePlayer = g.player === p.player && g.team === p.team && (!g.division || g.division === p.division);
-        const yearMatch = yearVal === "ALL" || extractGameYear(g) === yearVal;
-        const stageMatch = stageVal === "all" || String(g.stage || "regular").toLowerCase() === stageVal;
-        return samePlayer && yearMatch && stageMatch;
-      });
-
-      detail.innerHTML = `
-        <div>
-          <div style="font-size:1.1rem;font-weight:700;">${p.player}</div>
-          <div style="color:var(--muted);font-size:0.85rem;">${p.team} • ${p.division} • ${yearLabel} • ${STAGE_LABELS[stageVal] || "All Games"} (${activeStats.gp} GP)</div>
-        </div>
-        <div class="stat-pills">
-          <div class="pill"><div class="val">${activeStats.ppg}</div><div class="lbl">PPG (${activeStats.pts} TOT)</div></div>
-          <div class="pill"><div class="val">${activeStats.rpg}</div><div class="lbl">RPG (${activeStats.reb} TOT)</div></div>
-          <div class="pill"><div class="val">${activeStats.apg}</div><div class="lbl">APG (${activeStats.ast} TOT)</div></div>
-          <div class="pill"><div class="val">${activeStats.spg}</div><div class="lbl">SPG (${activeStats.stl} TOT)</div></div>
-          <div class="pill"><div class="val">${activeStats.bpg}</div><div class="lbl">BPG (${activeStats.blk} TOT)</div></div>
-          <div class="pill"><div class="val">${activeStats.epg}</div><div class="lbl">EFF/G (${activeStats.eff} TOT)</div></div>
-          <div class="pill"><div class="val">${activeStats.tpg ?? 0}</div><div class="lbl">TO/G (${activeStats.to ?? 0} TOT)</div></div>
-          <div class="pill"><div class="val">${formatSignedStat(activeStats.pmg)}</div><div class="lbl">+/-/G (${formatSignedStat(activeStats.plus_minus)} TOT)</div></div>
-          <div class="pill"><div class="val">${activeStats.fg_pct}%</div><div class="lbl">FG (${activeStats.fgm}/${activeStats.fga})</div></div>
-        </div>
-        <div style="font-size:0.84rem;color:var(--muted);">
-          2PT: ${activeStats.two_pct}% (${activeStats.two_pm}/${activeStats.two_pa}) • 3PT: ${activeStats.tp_pct}% (${activeStats.tpm}/${activeStats.tpa}) • FT: ${activeStats.ft_pct}% (${activeStats.ftm}/${activeStats.fta})
-        </div>
-        <div>
-          <strong style="font-size:0.85rem;color:var(--muted);display:block;margin-bottom:6px;">Season Split Comparison (${yearLabel})</strong>
-          <div class="split-grid">
-            ${renderSplitBox("Regular Season", regStats)}
-            ${renderSplitBox("Playoffs", plyStats)}
-          </div>
-        </div>
-        <div>
-          <strong style="font-size:0.88rem;">Game Log (${playerGames.length})</strong>
-          ${playerGames.length ? `
-            <table style="margin-top:6px;font-size:0.8rem;">
-              <thead><tr><th>Date</th><th>Stage</th><th>vs</th><th>PTS</th><th>REB</th><th>AST</th><th>EFF</th><th>+/-</th></tr></thead>
-              <tbody>
-                ${playerGames.map(g => `
-                  <tr>
-                    <td>${g.date}</td>
-                    <td>${formatStageBadge(g.stage)}</td>
-                    <td>${g.opponent}</td>
-                    <td>${g.pts}</td>
-                    <td>${g.reb}</td>
-                    <td>${g.ast}</td>
-                    <td>${g.eff}</td>
-                    <td>${formatSignedStat(g.plus_minus)}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          ` : `<p class="empty">No game rows attached for this filter.</p>`}
-        </div>
-      `;
-    }
-
-    document.getElementById("yearFilter").addEventListener("change", render);
-    document.getElementById("divisionFilter").addEventListener("change", render);
-    document.getElementById("stageFilter").addEventListener("change", render);
-    document.getElementById("statSelect").addEventListener("change", render);
-    document.getElementById("searchInput").addEventListener("input", render);
-
-    loadData();
-  </script>
-</body>
-</html>
+          <div class
