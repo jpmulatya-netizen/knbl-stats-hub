@@ -371,7 +371,7 @@
       }
 
       divSelect.innerHTML = `<option value="ALL">All Divisions</option>` +
-        orderedDivisions.map(d => `<option value="${d}">${d}</option>`).join(""); divSelect.value = orderedDivisions.includes(currentVal) ? currentVal : "ALL"; }  async function loadData() { try { const res = await fetch("./knbl_dashboard_data.json"); if (!res.ok) throw new Error("JSON not found"); DATASET = await res.json(); } catch (e) { DATASET = { years: [], players: [], games: [] }; } populateYearFilter(); populateDivisionFilter(); render(); }  function render() { const yearVal = document.getElementById("yearFilter").value; const divVal = document.getElementById("divisionFilter").value; const stageVal = document.getElementById("stageFilter").value; const statKey = document.getElementById("statSelect").value; const query = document.getElementById("searchInput").value.trim().toLowerCase();  const statLabel = STAT_LABELS[statKey] \vert{}\vert{} statKey.toUpperCase(); const stageLabel = STAGE_LABELS[stageVal] \vert{}\vert{} "All Games"; const yearPrefix = yearVal === "ALL" ? "" : `${yearVal} • `;
+        orderedDivisions.map(d => `<option value="${d}">${d}</option>`).join(""); divSelect.value = orderedDivisions.includes(currentVal) ? currentVal : "ALL"; }  async function loadData() { try { const res = await fetch("./knbl_dashboard_data.json"); if (!res.ok) throw new Error("JSON not found"); DATASET = await res.json(); } catch (e) { DATASET = { years: [], players: [], games: [] }; } populateYearFilter(); populateDivisionFilter(); render(); }  function render() { const yearVal = document.getElementById("yearFilter").value; const divVal = document.getElementById("divisionFilter").value; const stageVal = document.getElementById("stageFilter").value; const statKey = document.getElementById("statSelect").value; const query = document.getElementById("searchInput").value.trim().toLowerCase();  const statLabel = STAT_LABELS[statKey] || statKey.toUpperCase(); const stageLabel = STAGE_LABELS[stageVal] || "All Games"; const yearPrefix = yearVal === "ALL" ? "" : `${yearVal} • `;
 
       document.getElementById("activeStatHeader").textContent = statLabel;
       document.getElementById("tableTitle").textContent =
@@ -438,6 +438,31 @@
     }
 
     function renderSplitBox(title, s) {
-      if (!s || (s.gp ?? 0) === 0) {
-        return `
-          <div class
+  if (!s || (s.gp ?? 0) === 0) {
+    return `
+      <div class="split-box empty">
+        <div class="split-title">${title}</div>
+        <div class="muted">No games recorded</div>
+      </div>`;
+  }
+  return `
+    <div class="split-box">
+      <div class="split-title">${title}</div>
+      <div class="split-grid">
+        <div><span>GP</span><strong>${s.gp ?? 0}</strong></div>
+        <div><span>PPG</span><strong>${Number(s.ppg ?? 0).toFixed(1)}</strong></div>
+        <div><span>RPG</span><strong>${Number(s.rpg ?? 0).toFixed(1)}</strong></div>
+        <div><span>APG</span><strong>${Number(s.apg ?? 0).toFixed(1)}</strong></div>
+      </div>
+    </div>`;
+}
+
+["yearFilter", "divisionFilter", "stageFilter", "statSelect"].forEach(id => {
+  document.getElementById(id)?.addEventListener("change", render);
+});
+document.getElementById("searchInput")?.addEventListener("input", render);
+
+loadData();
+</script>
+</body>
+</html>
